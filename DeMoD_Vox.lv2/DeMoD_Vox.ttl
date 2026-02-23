@@ -1,0 +1,374 @@
+@prefix doap:  <http://usefulinc.com/ns/doap#> .
+@prefix foaf:  <http://xmlns.com/foaf/0.1/> .
+@prefix lv2:   <http://lv2plug.in/ns/lv2core#> .
+@prefix ui:    <http://lv2plug.in/ns/extensions/ui#> .
+@prefix epp:   <http://lv2plug.in/ns/ext/port-props#> .
+@prefix atom:  <http://lv2plug.in/ns/ext/atom#> .
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix units: <http://lv2plug.in/ns/extensions/units#> .
+@prefix urid:  <http://lv2plug.in/ns/ext/urid#> .
+<https://faustlv2.bitbucket.io/DeMoD_Vox>
+       a lv2:Plugin ;
+       doap:name "DeMoD_Vox" ;
+       lv2:binary <DeMoD_Vox.so> ;
+       lv2:requiredFeature urid:map ;
+       lv2:optionalFeature epp:supportsStrictBounds ;
+       lv2:optionalFeature lv2:hardRTCapable ;
+    lv2:port [
+	a lv2:InputPort ;
+	a lv2:ControlPort ;
+	lv2:index 0 ;
+	lv2:symbol "__Pitch_Shift_0" ;
+	lv2:name "1-Pitch Shift" ;
+        lv2:portProperty epp:hasStrictBounds ;
+        epp:rangeSteps 12 ;
+	lv2:default 0 ;
+	lv2:minimum -12 ;
+	lv2:maximum 0 ;
+	rdfs:comment "-12=one octave down. 0=no shift (21 ms latency still applies)" ;
+	units:unit [
+            a            units:Unit ;
+            units:name   "semitones" ;
+            units:symbol "semitones" ;
+            units:render "%f semitones"
+	] ;
+    ] , [
+	a lv2:InputPort ;
+	a lv2:ControlPort ;
+	lv2:index 1 ;
+	lv2:symbol "__Bass_Boost_1" ;
+	lv2:name "2-Bass Boost" ;
+        lv2:portProperty epp:hasStrictBounds ;
+        epp:rangeSteps 36 ;
+	lv2:default 0 ;
+	lv2:minimum 0 ;
+	lv2:maximum 18 ;
+	rdfs:comment "Low shelf gain. 0=flat passthrough" ;
+	units:unit [
+            a            units:Unit ;
+            units:name   "dB" ;
+            units:symbol "dB" ;
+            units:render "%f dB"
+	] ;
+    ] , [
+	a lv2:InputPort ;
+	a lv2:ControlPort ;
+	lv2:index 2 ;
+	lv2:symbol "__Bass_Freq_2" ;
+	lv2:name "3-Bass Freq" ;
+        lv2:portProperty epp:hasStrictBounds ;
+        epp:rangeSteps 72 ;
+	lv2:default 120 ;
+	lv2:minimum 40 ;
+	lv2:maximum 400 ;
+	rdfs:comment "Shelf -3 dB point. 80-150 Hz = sub weight" ;
+	units:unit [
+            a            units:Unit ;
+            units:name   "Hz" ;
+            units:symbol "Hz" ;
+            units:render "%f Hz"
+	] ;
+    ] , [
+	a lv2:InputPort ;
+	a lv2:ControlPort ;
+	lv2:index 3 ;
+	lv2:symbol "__HPF_Freq_3" ;
+	lv2:name "1-HPF Freq" ;
+        lv2:portProperty epp:hasStrictBounds ;
+        epp:rangeSteps 480 ;
+	lv2:default 100 ;
+	lv2:minimum 20 ;
+	lv2:maximum 500 ;
+	rdfs:comment "Cut below this to remove mud. Default 100 Hz" ;
+	units:unit [
+            a            units:Unit ;
+            units:name   "Hz" ;
+            units:symbol "Hz" ;
+            units:render "%f Hz"
+	] ;
+    ] , [
+	a lv2:InputPort ;
+	a lv2:ControlPort ;
+	lv2:index 4 ;
+	lv2:symbol "__LPF_Freq_4" ;
+	lv2:name "2-LPF Freq" ;
+        lv2:portProperty epp:hasStrictBounds ;
+        epp:rangeSteps 1100 ;
+	lv2:default 4500 ;
+	lv2:minimum 1000 ;
+	lv2:maximum 12000 ;
+	rdfs:comment "Vox-unit bandwidth ceiling. Default 4500 Hz" ;
+	units:unit [
+            a            units:Unit ;
+            units:name   "Hz" ;
+            units:symbol "Hz" ;
+            units:render "%f Hz"
+	] ;
+    ] , [
+	a lv2:InputPort ;
+	a lv2:ControlPort ;
+	lv2:index 5 ;
+	lv2:symbol "__Mid_Boost_5" ;
+	lv2:name "3-Mid Boost" ;
+        lv2:portProperty epp:hasStrictBounds ;
+        epp:rangeSteps 36 ;
+	lv2:default 6 ;
+	lv2:minimum 0 ;
+	lv2:maximum 18 ;
+	rdfs:comment "Presence peak gain. Default 6 dB" ;
+	units:unit [
+            a            units:Unit ;
+            units:name   "dB" ;
+            units:symbol "dB" ;
+            units:render "%f dB"
+	] ;
+    ] , [
+	a lv2:InputPort ;
+	a lv2:ControlPort ;
+	lv2:index 6 ;
+	lv2:symbol "__Mid_Freq_6" ;
+	lv2:name "4-Mid Freq" ;
+        lv2:portProperty epp:hasStrictBounds ;
+        epp:rangeSteps 450 ;
+	lv2:default 2000 ;
+	lv2:minimum 500 ;
+	lv2:maximum 5000 ;
+	units:unit [
+            a            units:Unit ;
+            units:name   "Hz" ;
+            units:symbol "Hz" ;
+            units:render "%f Hz"
+	] ;
+    ] , [
+	a lv2:InputPort ;
+	a lv2:ControlPort ;
+	lv2:index 7 ;
+	lv2:symbol "__Mid_BW_7" ;
+	lv2:name "5-Mid BW" ;
+        lv2:portProperty epp:hasStrictBounds ;
+        epp:rangeSteps 390 ;
+	lv2:default 800 ;
+	lv2:minimum 100 ;
+	lv2:maximum 4000 ;
+	rdfs:comment "Peak bandwidth. Wider = gentler. Default 800 Hz" ;
+	units:unit [
+            a            units:Unit ;
+            units:name   "Hz" ;
+            units:symbol "Hz" ;
+            units:render "%f Hz"
+	] ;
+    ] , [
+	a lv2:InputPort ;
+	a lv2:ControlPort ;
+	lv2:index 8 ;
+	lv2:symbol "__Bit_Depth_8" ;
+	lv2:name "1-Bit Depth" ;
+        lv2:portProperty epp:hasStrictBounds ;
+        epp:rangeSteps 14 ;
+	lv2:default 8 ;
+	lv2:minimum 2 ;
+	lv2:maximum 16 ;
+	rdfs:comment "Word length. Lower = more grit. Default 8" ;
+    ] , [
+	a lv2:InputPort ;
+	a lv2:ControlPort ;
+	lv2:index 9 ;
+	lv2:symbol "__Downsample_9" ;
+	lv2:name "2-Downsample" ;
+        lv2:portProperty epp:hasStrictBounds ;
+        epp:rangeSteps 7 ;
+	lv2:default 2 ;
+	lv2:minimum 1 ;
+	lv2:maximum 8 ;
+	rdfs:comment "Sample-rate divisor. Default 2" ;
+    ] , [
+	a lv2:InputPort ;
+	a lv2:ControlPort ;
+	lv2:index 10 ;
+	lv2:symbol "__Mix_10" ;
+	lv2:name "3-Mix" ;
+        lv2:portProperty epp:hasStrictBounds ;
+        epp:rangeSteps 100 ;
+	lv2:default 0.6 ;
+	lv2:minimum 0 ;
+	lv2:maximum 1 ;
+	rdfs:comment "0=dry  1=fully crushed. Default 0.6" ;
+    ] , [
+	a lv2:InputPort ;
+	a lv2:ControlPort ;
+	lv2:index 11 ;
+	lv2:symbol "__Carrier_Freq_11" ;
+	lv2:name "1-Carrier Freq" ;
+        lv2:portProperty epp:hasStrictBounds ;
+        epp:rangeSteps 799 ;
+	lv2:default 60 ;
+	lv2:minimum 1 ;
+	lv2:maximum 800 ;
+	rdfs:comment "60-300 Hz for metallic character" ;
+	units:unit [
+            a            units:Unit ;
+            units:name   "Hz" ;
+            units:symbol "Hz" ;
+            units:render "%f Hz"
+	] ;
+    ] , [
+	a lv2:InputPort ;
+	a lv2:ControlPort ;
+	lv2:index 12 ;
+	lv2:symbol "__Mix_12" ;
+	lv2:name "2-Mix" ;
+        lv2:portProperty epp:hasStrictBounds ;
+        epp:rangeSteps 100 ;
+	lv2:default 0.35 ;
+	lv2:minimum 0 ;
+	lv2:maximum 1 ;
+	rdfs:comment "0=dry  1=fully ring-modulated. Default 0.35" ;
+    ] , [
+	a lv2:InputPort ;
+	a lv2:ControlPort ;
+	lv2:index 13 ;
+	lv2:symbol "__Delay_13" ;
+	lv2:name "1-Delay" ;
+        lv2:portProperty epp:hasStrictBounds ;
+        epp:rangeSteps 118 ;
+	lv2:default 10 ;
+	lv2:minimum 1 ;
+	lv2:maximum 60 ;
+	rdfs:comment "8-15 ms = helmet interior. Min 1 ms" ;
+	units:unit [
+            a            units:Unit ;
+            units:name   "ms" ;
+            units:symbol "ms" ;
+            units:render "%f ms"
+	] ;
+    ] , [
+	a lv2:InputPort ;
+	a lv2:ControlPort ;
+	lv2:index 14 ;
+	lv2:symbol "__Mix_14" ;
+	lv2:name "2-Mix" ;
+        lv2:portProperty epp:hasStrictBounds ;
+        epp:rangeSteps 100 ;
+	lv2:default 0.22 ;
+	lv2:minimum 0 ;
+	lv2:maximum 1 ;
+    ] , [
+	a lv2:InputPort ;
+	a lv2:ControlPort ;
+	lv2:index 15 ;
+	lv2:symbol "__Feedback_15" ;
+	lv2:name "3-Feedback" ;
+        lv2:portProperty epp:hasStrictBounds ;
+        epp:rangeSteps 70 ;
+	lv2:default 0.15 ;
+	lv2:minimum 0 ;
+	lv2:maximum 0.7 ;
+	rdfs:comment "Keep below 0.5 to avoid runaway" ;
+    ] , [
+	a lv2:InputPort ;
+	a lv2:ControlPort ;
+	lv2:index 16 ;
+	lv2:symbol "__Threshold_16" ;
+	lv2:name "1-Threshold" ;
+        lv2:portProperty epp:hasStrictBounds ;
+        epp:rangeSteps 80 ;
+	lv2:default -18 ;
+	lv2:minimum -40 ;
+	lv2:maximum 0 ;
+	units:unit [
+            a            units:Unit ;
+            units:name   "dB" ;
+            units:symbol "dB" ;
+            units:render "%f dB"
+	] ;
+    ] , [
+	a lv2:InputPort ;
+	a lv2:ControlPort ;
+	lv2:index 17 ;
+	lv2:symbol "__Ratio_17" ;
+	lv2:name "2-Ratio" ;
+        lv2:portProperty epp:hasStrictBounds ;
+        epp:rangeSteps 38 ;
+	lv2:default 8 ;
+	lv2:minimum 1 ;
+	lv2:maximum 20 ;
+	rdfs:comment "8:1 is aggressive. Higher = harder limiting" ;
+    ] , [
+	a lv2:InputPort ;
+	a lv2:ControlPort ;
+	lv2:index 18 ;
+	lv2:symbol "__Attack_18" ;
+	lv2:name "3-Attack" ;
+        lv2:portProperty epp:hasStrictBounds ;
+        epp:rangeSteps 799 ;
+	lv2:default 5 ;
+	lv2:minimum 0.1 ;
+	lv2:maximum 80 ;
+	units:unit [
+            a            units:Unit ;
+            units:name   "ms" ;
+            units:symbol "ms" ;
+            units:render "%f ms"
+	] ;
+    ] , [
+	a lv2:InputPort ;
+	a lv2:ControlPort ;
+	lv2:index 19 ;
+	lv2:symbol "__Release_19" ;
+	lv2:name "4-Release" ;
+        lv2:portProperty epp:hasStrictBounds ;
+        epp:rangeSteps 490 ;
+	lv2:default 60 ;
+	lv2:minimum 10 ;
+	lv2:maximum 500 ;
+	units:unit [
+            a            units:Unit ;
+            units:name   "ms" ;
+            units:symbol "ms" ;
+            units:render "%f ms"
+	] ;
+    ] , [
+	a lv2:InputPort ;
+	a lv2:ControlPort ;
+	lv2:index 20 ;
+	lv2:symbol "__Gain_20" ;
+	lv2:name "1-Gain" ;
+        lv2:portProperty epp:hasStrictBounds ;
+        epp:rangeSteps 72 ;
+	lv2:default 6 ;
+	lv2:minimum -12 ;
+	lv2:maximum 24 ;
+	rdfs:comment "Acts as compressor makeup gain. Note: +24 dB can clip — watch meter" ;
+	units:unit [
+            a            units:Unit ;
+            units:name   "dB" ;
+            units:symbol "dB" ;
+            units:render "%f dB"
+	] ;
+    ] , [
+	a lv2:InputPort ;
+	a lv2:ControlPort ;
+	lv2:index 21 ;
+	lv2:symbol "__Bit_Depth_21" ;
+	lv2:name "2-Bit Depth" ;
+        lv2:portProperty epp:hasStrictBounds ;
+        epp:rangeSteps 2 ;
+	lv2:default 16 ;
+	lv2:minimum 16 ;
+	lv2:maximum 24 ;
+	rdfs:comment "16=CD/broadcast  20=DAT  24=mastering. Step of 4" ;
+    ] , [
+	a lv2:InputPort ;
+	a lv2:AudioPort ;
+	lv2:index 22 ;
+	lv2:symbol "in0" ;
+	lv2:name "in0" ;
+    ] , [
+	a lv2:OutputPort ;
+	a lv2:AudioPort ;
+	lv2:index 23 ;
+	lv2:symbol "out0" ;
+	lv2:name "out0" ;
+    ]
+.

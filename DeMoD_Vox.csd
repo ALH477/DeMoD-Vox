@@ -82,7 +82,7 @@
 ;   echo_mix       0   – 1             0.22     Echo wet level
 ;   echo_fb        0   – 0.7           0.15     Echo feedback
 ;   comp_thresh    -40 – 0 dBFS        -18      Compressor threshold
-;   comp_ratio     1   – 20            8        Compressor ratio (FIX: was hardcoded)
+;   comp_ratio     1   – 20            8        Compressor ratio
 ;   comp_attack    0.1 – 80 ms         5        Compressor attack
 ;   comp_release   10  – 500 ms        60       Compressor release
 ;   out_gain       -12 – 24 dB         6        Output level / makeup gain
@@ -138,7 +138,7 @@ instr 0
   chnset 10.0,    "echo_ms"
   chnset 0.22,    "echo_mix"
   chnset 0.15,    "echo_fb"
-  ; Compressor  (FIX: comp_ratio added — was missing, ratio was always hardcoded 8)
+  ; Compressor
   chnset -18.0,   "comp_thresh"
   chnset 8.0,     "comp_ratio"
   chnset 5.0,     "comp_attack"
@@ -172,7 +172,7 @@ instr 1
   k_emix      chnget "echo_mix"
   k_efb       chnget "echo_fb"
   k_thresh    chnget "comp_thresh"
-  k_ratio     chnget "comp_ratio"     ; FIX: now read from channel, not hardcoded
+  k_ratio     chnget "comp_ratio"
   k_att_ms    chnget "comp_attack"
   k_rel_ms    chnget "comp_release"
   k_outdb     chnget "out_gain"
@@ -201,7 +201,7 @@ instr 1
   ;
   ;  PVS PIPELINE:
   ;    pvsanal  — STFT analysis → complex spectral stream fsig
-  ;    pvscal   — scale all bin frequencies by k_scale
+  ;    pvscale  — scale all bin frequencies by k_scale
   ;    pvsynth  — inverse STFT → audio
   ;
   ;  LATENCY: ifftsize / sr = 2048 / 96000 ≈ 21 ms (constant).
@@ -219,7 +219,7 @@ instr 1
   k_scale    = pow(2, k_pitch_st / 12.0)
 
   f_sig      pvsanal  a_in, i_fftsize, i_overlap, i_winsize, 1
-  f_scaled   pvscal   f_sig, k_scale, 0, 1
+  f_scaled   pvscale  f_sig, k_scale, 0, 1
   a_eq       pvsynth  f_scaled
 
   ; ==========================================================
@@ -241,9 +241,6 @@ instr 1
   ;    steps = 2^(k_bits-1),  step size = 1/steps
   ;
   ;  Sample-rate reduction: samphold with phasor gate.
-  ;    phasor at sr/k_ds_int Hz completes one period every
-  ;    k_ds_int samples.  samphold updates when gate > 0
-  ;    (rising portion of phasor), holds when gate <= 0.
   ; ==========================================================
 
   k_ds_int   = int(k_ds)
@@ -261,9 +258,6 @@ instr 1
 
   ; ==========================================================
   ;  STAGE 3 — Ring Modulator
-  ;
-  ;  Multiplying by a sine carrier creates symmetric sidebands
-  ;  at (carrier ± voice_partial) — metallic robotic resonance.
   ; ==========================================================
 
   a_carrier  poscil 1, k_ring_hz
@@ -274,22 +268,12 @@ instr 1
   ;  STAGE 4 — Helmet Echo
   ;
   ;  Feedback comb filter simulating closed-visor acoustics.
-  ;  Minimum 1 ms delay prevents zero-sample feedback loop.
-  ;
-  ;  Csound 7 compatible: uses vdelay (variable delay) instead
-  ;  of the delayr/delayw/deltapi pattern which changed in CS7.
-  ;
-  ;  vdelay(asig, idel, imaxdel) — interpolated variable delay
-  ;    idel = k_echo_t * 1000 (convert to ms for vdelay)
-  ;    imaxdel = i_max_dly * 1000 (max delay in ms)
-  ;
-  ;  Feedback loop: a_delout feeds back into the delay input.
+  ;  Csound 7 compatible vdelay.
   ; ==========================================================
 
   i_max_dly  = 65                 ; 65 ms — slider max is 60 ms
   a_delout   init 0               ; zero on first block
 
-  ; Feedback delay using vdelay (Csound 7 compatible)
   a_delin    = a_eq + a_delout * k_efb
   a_delout   vdelay a_delin, k_echo_t * 1000, i_max_dly
 
@@ -297,30 +281,7 @@ instr 1
   a_eq       = a_eq + a_delout * k_emix
 
   ; ==========================================================
-  ;  STAGE 4b — Bass Boost (FIX: proper 1st-order low shelf)
-  ;
-  ;  PREVIOUS IMPLEMENTATION (INCORRECT):
-  ;    eqfil a_eq, k_bass_hz, k_bass_hz, ampdb(k_bass_db)
-  ;    This was a wide bell peak filter (Q=1), NOT a shelf.
-  ;    Above k_bass_hz the response returned to 0 dB, not flat.
-  ;
-  ;  CORRECT IMPLEMENTATION — parallel 1-pole low shelf:
-  ;    a_lp  = tone(a_eq, k_bass_hz)  — 1-pole Butterworth LP
-  ;    a_eq  = a_eq + a_lp × (k_bass_lin − 1)
-  ;
-  ;  The `tone` opcode implements H(z) = (1−c)/(1−cz⁻¹) where
-  ;  c is chosen so the −3 dB point is at k_bass_hz.
-  ;
-  ;  FREQUENCY RESPONSE:
-  ;    DC:        a_lp = a_eq  →  output = a_eq × k_bass_lin
-  ;               (full shelf gain)
-  ;    k_bass_hz: a_lp = a_eq / √2  →  output ≈ midpoint gain
-  ;               (smooth shelf transition)
-  ;    HF (→∞):  a_lp → 0  →  output = a_eq
-  ;               (unity — bass boost only, not broadband)
-  ;
-  ;  BYPASS: at k_bass_db = 0, k_bass_lin = 1.0, so the
-  ;  formula becomes a_eq + a_lp × 0 = a_eq.  True passthrough.
+  ;  STAGE 4b — Bass Boost (proper 1st-order low shelf)
   ; ==========================================================
 
   k_bass_lin = ampdb(k_bass_db)
@@ -328,20 +289,7 @@ instr 1
   a_eq       = a_eq + a_lp * (k_bass_lin - 1)
 
   ; ==========================================================
-  ;  STAGE 5 — Compressor  (FIX: k_ratio now from channel)
-  ;
-  ;  compress(asig, acomp, kthresh, kloknee, khiknee,
-  ;           kratio, katt, krel, ilook)
-  ;
-  ;  Soft knee: ±3 dB around threshold (kloknee=thresh+3,
-  ;  khiknee=thresh+6) for a smooth onset of gain reduction.
-  ;  ilook=0.01 s: look-ahead window.
-  ;
-  ;  NOTE: compress does NOT apply makeup gain.  Use out_gain
-  ;  in Stage 6 to compensate for gain reduction.
-  ;
-  ;  PREVIOUS BUG: ratio was hardcoded as literal 8 — the
-  ;  comp_ratio channel had no effect.  Now uses k_ratio.
+  ;  STAGE 5 — Compressor
   ; ==========================================================
 
   a_eq       compress a_eq, a_eq, \
@@ -358,29 +306,10 @@ instr 1
   ; ==========================================================
   ;  STAGE 6b — Hard Clip + TPDF Dither + Word-Length Reduction
   ;
-  ;  HARD CLIP (fix: added this stage)
-  ;  ----------------------------------
-  ;  Clamps the signal to [-1.0, +1.0] before quantisation.
-  ;  Without this, a signal above ±1.0 (reachable with high
-  ;  output gain) causes the floor() in WLR to produce values
-  ;  outside the target integer range — the equivalent of
-  ;  digital wrap-around rather than clipping.
+  ;  Hard clip now uses the dedicated `limit` opcode (fully
+  ;  a-rate compatible in Csound 7 — fixes the ternary error).
   ;
-  ;  TPDF DITHER — two independent `rand` calls
-  ;  -------------------------------------------
-  ;  rand produces a-rate uniform random in [-amp, +amp].
-  ;  Two independent calls (different PRNG state advances)
-  ;  subtract to give TPDF in [-amp*2, +amp*2].
-  ;  Amplitude per source = 0.5 LSB → combined = ±1 LSB.
-  ;
-  ;  WORD-LENGTH REDUCTION
-  ;  ----------------------
-  ;  1. Hard clip to ±1.0.
-  ;  2. Add TPDF dither (±1 LSB).
-  ;  3. Multiply to integer range × k_out_steps.
-  ;  4. Round to nearest integer via floor + 0.5.
-  ;  5. Divide back to float.  Output represents the target
-  ;     bit depth's quantisation noise floor exactly.
+  ;  TPDF dither uses two independent rand sources.
   ; ==========================================================
 
   k_out_steps = pow(2, k_outbits - 1)        ; e.g. 32767 for 16-bit
@@ -391,8 +320,10 @@ instr 1
   a_r2        rand k_lsb * 0.5
   a_dither    = a_r1 - a_r2                  ; TPDF, ±1 LSB
 
-  ; Hard clip → dither → quantise
-  a_out       = (a_out > 1.0 ? 1.0 : (a_out < -1.0 ? -1.0 : a_out))
+  ; Hard clip (Csound 7 compatible)
+  a_out       limit a_out, -1.0, 1.0
+
+  ; Dither → quantise
   a_out       = floor((a_out + a_dither) * k_out_steps + 0.5) / k_out_steps
 
                out a_out

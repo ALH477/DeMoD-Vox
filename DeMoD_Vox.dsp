@@ -258,21 +258,20 @@ bass_boost = fi.low_shelf(bass_db, bass_freq);
 compressor = co.compressor_mono(c_ratio, c_thresh, c_attack, c_release);
 
 
-// ---- Stage 6: Hard Clip + TPDF Dither + WLR ----------------
-//
-//  Uses stdfaust's no.noise for dither generation.
-//  TPDF is created by subtracting two independent noise sources.
+// ============================================================
+//  STAGE 6: Output Gain + Hard Clip + TPDF Dither + WLR
+// ============================================================
 
-dither_lsb  = pow(2.0, -(float(out_bits) - 1.0));
-out_steps   = pow(2.0, float(out_bits) - 1.0);
+clip(x) = max(-1.0, min(1.0, x));
 
-// Create TPDF dither using two independent noise instances
-// The key is using & enough to keep them as separate signals
-dither = no.noise * dither_lsb;
+wl_reduce(x) = floor((clip(x) + dither) * out_steps + 0.5) / out_steps
+with {
+    out_steps = pow(2.0, float(out_bits) - 1.0);
+    lsb       = 1.0 / out_steps;                    // amplitude of 1 LSB
 
-// Hard clip then dither then quantise.
-clip(x)      = max(-1.0, min(1.0, x));
-wl_reduce(x) = floor((clip(x) + dither) * out_steps + 0.5) / out_steps;
+    // Proper TPDF dither (±1 LSB triangular) — two independent noise sources
+    dither    = (no.noise, no.noise) : - : *(lsb * 0.5);
+};
 
 
 // ============================================================
