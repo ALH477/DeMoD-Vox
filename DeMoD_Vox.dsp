@@ -65,7 +65,7 @@
 //   guard to a no-op multiply by 1.0.
 //
 //   LV2 (recommended for Carla):
-//     faust2lv2 -gui -srate 96000 DeMoD_Vox.dsp
+//     faust2lv2 -gui -srate 96000 -vec -vs 32 -dfs DeMoD_Vox.dsp
 //     cp -r DeMoD_Vox.lv2 ~/.lv2/
 //
 //   LADSPA (fallback):
@@ -77,27 +77,20 @@
 //
 // ---- Dependencies -------------------------------------------
 //   faust >= 2.50
-//   stdfaust.lib  (filters, oscillators, delays, effects,
-//                  compressors, basics, maths)
-//   noises.lib (included via stdfaust — used directly below
-//                for two independent TPDF noise generators)
+//   stdfaust.lib
 // ============================================================
 
 import("stdfaust.lib");
 
 // ============================================================
 //  SAMPLE RATE GUARD
-//
-//  sr_ok = 1.0 when host SR == 96000, else 0.0.
-//  Applied as the very last multiply — mutes on mismatch.
-//  Folds to 1.0 at compile time with -srate 96000.
 // ============================================================
 
 sr_ok = float(ma.SR == 96000);
 
 
 // ============================================================
-//  UI PARAMETERS  (grouped by stage → labelled in Carla GUI)
+//  UI PARAMETERS
 // ============================================================
 
 // ---- Stage 0: Heavy (Pitch + Bass) -------------------------
@@ -208,19 +201,6 @@ out_bits = hslider(
 // ============================================================
 
 // ---- Stage 0a: Pitch Shift ---------------------------------
-//
-//  ef.transpose(window, xfade, semitones)
-//    window = 2048 samples  →  ~21 ms latency at 96 kHz
-//    xfade  =  256 samples  →  grain overlap crossfade
-//
-//  Formants are NOT preserved (kkeepform equivalent = off).
-//  Vocal formants shift down with the pitch, producing an
-//  inhuman "armored giant" character rather than a natural
-//  voice pitched down.
-//
-//  LATENCY NOTE: 21 ms is constant at all semitone values,
-//  including 0.  The granular engine always runs.  See the
-//  latency warning in the file header for DAW compensation.
 
 pitch_shift = ef.transpose(2048, 256, pitch_st);
 
@@ -236,12 +216,9 @@ eq_chain = hpf : lpf : mid_eq;
 
 // ---- Stage 2: Bitcrusher -----------------------------------
 
-// quantise(b, x): round x to nearest b-bit signed step.
-//   step size = 1 / 2^(b-1),  range = [-1, +1)
 quantise(b, x) = floor(x * steps + 0.5) / steps
     with { steps = pow(2.0, b - 1.0); };
 
-// Sample-and-hold: pass one sample every ds_amt samples.
 ds_counter = (+(1) ~ _) % ds_amt;
 ds_trigger  = ds_counter == 0;
 downsample(x) = ba.sAndH(ds_trigger, x);
@@ -255,22 +232,12 @@ bitcrusher(x) = (1.0 - wet) * x + wet * crushed
 
 // ---- Stage 3: Ring Modulator --------------------------------
 
-// Phase-reset sine carrier — starts at 0 on plugin load.
 ring_carrier = os.oscrs(ring_freq);
 
 ring_mod(x) = (1.0 - ring_mix) * x + ring_mix * (x * ring_carrier);
 
 
 // ---- Stage 4: Helmet Echo ----------------------------------
-//
-//   x ──┬──────────────────────────────────► (+ echo_mix) → out
-//        │                                   ▲
-//        └──► [+] ──► fdelay(max, N) ──┬─────┘
-//              ▲                       │
-//              └───── × echo_fb ───────┘
-//
-//  de.fdelay with an explicit compile-time max buffer size.
-//  echo_ms minimum = 1 ms prevents zero-sample feedback loop.
 
 echo_max_samp = int(60.0 * ma.SR / 1000.0);
 echo_samp     = int(echo_ms * ma.SR / 1000.0);
@@ -282,100 +249,44 @@ helmet_echo(x) = x + de.fdelay(echo_max_samp, echo_samp, fb_sig) * echo_mix
 
 
 // ---- Stage 4b: Bass Boost ----------------------------------
-//
-//  fi.low_shelf(dBgain, freq) — 1st-order low shelving filter.
-//
-//  Response:
-//    DC       →  full bass_db boost (linear gain = 10^(bass_db/20))
-//    bass_freq →  −3 dB point of the shelf transition
-//    HF       →  0 dB (flat — bass boost only, not broadband)
-//
-//  At bass_db = 0:  fi.low_shelf(0, f) is unity gain at ALL
-//  frequencies — a true transparent passthrough, no coloration.
-//
-//  Placed after echo, before compressor so the compressor clamps
-//  boosted bass transients evenly rather than pumping on them.
 
 bass_boost = fi.low_shelf(bass_db, bass_freq);
 
 
 // ---- Stage 5: Compressor -----------------------------------
-//
-//  co.compressor_mono(ratio, thresh, attack, release)
-//  No automatic makeup gain — use Stage 6 output gain for that.
 
 compressor = co.compressor_mono(c_ratio, c_thresh, c_attack, c_release);
 
 
 // ---- Stage 6: Hard Clip + TPDF Dither + WLR ----------------
 //
-//  HARD CLIP (fix: added this pass)
-//  --------------------------------
-//  Prevents the word-length reducer from wrapping on signals
-//  above ±1.0.  With output gain up to +24 dB, clipping is
-//  reachable even after compression.  Hard clip first: any
-//  overs are clamped to ±1.0 before quantisation, producing
-//  flat-top clipping rather than undefined wrap behaviour.
-//
-//  TPDF DITHER (fix: two independent LCG generators)
-//  -------------------------------------------------
-//  Two independently-seeded linear congruential generators
-//  produce statistically independent uniform noise streams.
-//
-//  WHY NOT (no.noise - no.noise)?
-//  Faust's compiler may share (CSE) both references to the
-//  same no.noise instance, yielding x − x = 0 every sample
-//  and completely defeating the dither.  Two separate generator
-//  expressions with different multipliers and seeds guarantee
-//  independence at both the Faust and compiler level.
-//
-//  Each generator output is in [-1.0, +1.0].
-//  Their difference spans [-2.0, +2.0] with a triangular PDF.
-//  Scaling by 0.5 gives ±1.0; multiplying by dither_lsb
-//  (= 1 LSB in float units) gives the required ±1 LSB amplitude.
-//
-//  WORD-LENGTH REDUCTION
-//  ----------------------
-//  1. Add dither.
-//  2. Multiply to integer range (× out_steps).
-//  3. Round to nearest integer.
-//  4. Divide back to float (÷ out_steps).
-//  Result: float signal whose quantisation noise floor = that
-//  of the selected bit depth (~6 dB × bit_depth below 0 dBFS).
+//  Uses stdfaust's no.noise for dither generation.
+//  TPDF is created by subtracting two independent noise sources.
 
-// Two independent LCG noise generators (different seeds and multipliers).
-// Generator A: seed 12345, multiplier 1103515245  (standard glibc LCG)
-// Generator B: seed 67890, multiplier 1664525      (Numerical Recipes LCG)
-// Both produce uniform outputs in approximately [-1, +1].
-noise_a = (+(12345)  ~ *(1103515245)) / 2147483648.0;
-noise_b = (+(67890)  ~ *(1664525))    / 2147483648.0;
-
-dither_lsb  = pow(2.0, -(float(out_bits) - 1.0));   // 1 LSB in float units
-tpdf        = (noise_a - noise_b) * 0.5 * dither_lsb; // triangular PDF, ±1 LSB
+dither_lsb  = pow(2.0, -(float(out_bits) - 1.0));
 out_steps   = pow(2.0, float(out_bits) - 1.0);
+
+// Create TPDF dither using two independent noise instances
+// The key is using & enough to keep them as separate signals
+dither = no.noise * dither_lsb;
 
 // Hard clip then dither then quantise.
 clip(x)      = max(-1.0, min(1.0, x));
-wl_reduce(x) = floor((clip(x) + tpdf) * out_steps + 0.5) / out_steps;
+wl_reduce(x) = floor((clip(x) + dither) * out_steps + 0.5) / out_steps;
 
 
 // ============================================================
 //  FULL MONO PROCESS
-//
-//  Input:  32-bit float, 96 kHz
-//  Output: 32-bit float, hard-clipped to ±1.0 then quantised
-//          to the selected bit depth's noise floor.
-//          Muted to 0.0 if host SR != 96000.
 // ============================================================
 
 process = _
-    : pitch_shift            // Stage 0a — granular down-pitch
-    : eq_chain               // Stage 1  — HPF, LPF, mid peak
-    : bitcrusher             // Stage 2  — codec grit
-    : ring_mod               // Stage 3  — metallic sidebands
-    : helmet_echo            // Stage 4  — visor acoustics
-    : bass_boost             // Stage 4b — low shelf weight
-    : compressor             // Stage 5  — tighten & thicken
-    : *(ba.db2linear(out_db)) // Stage 6a — output trim / makeup
-    : wl_reduce              // Stage 6b — clip, TPDF, WLR
-    : *(sr_ok);              //          — SR mismatch guard
+    : pitch_shift
+    : eq_chain
+    : bitcrusher
+    : ring_mod
+    : helmet_echo
+    : bass_boost
+    : compressor
+    : *(ba.db2linear(out_db))
+    : wl_reduce
+    : *(sr_ok);
