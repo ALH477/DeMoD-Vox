@@ -11,82 +11,20 @@
 ;   Input format : 32-bit float  (Csound internal)
 ;   Output depth : 16-bit default · 20-bit · 24-bit selectable
 ;
-;   All processing runs in Csound's internal float.  The final
-;   stage hard-clips to ±1.0, applies TPDF dither, then
-;   truncates to the chosen word length.
-;
 ; ---- !! LATENCY WARNING !! ---------------------------------
 ;
 ;   This instrument introduces approximately 21 ms of latency
-;   from the PVS phase-vocoder pitch shifter:
-;
-;     latency = ifftsize / sr = 2048 / 96000 ≈ 21 ms
-;
-;   This latency is CONSTANT regardless of pitch setting,
-;   including at 0 semitones (no shift).
-;
-;   In a DAW / Carla patchbay:
-;     • Compensate by advancing the recorded output by ~21 ms.
-;     • Or use the csound-lv2 wrapper's latency report field
-;       if your host supports plugin delay compensation.
-;     • For zero-latency monitoring without pitch shift,
-;       bypass this instrument and patch audio directly.
+;   from the PVS phase-vocoder pitch shifter.
 ;
 ; ---- Signal Chain -------------------------------------------
 ;
-;   IN (32f, 96 kHz)
-;     → [Pitch Shift — PVS phase vocoder, 0 to −12 semitones]
-;     → [HPF] → [LPF] → [Mid Peak EQ]
-;     → [Bitcrusher / Downsample]
-;     → [Ring Modulator]
-;     → [Helmet Echo — short feedback delay]
-;     → [Bass Boost — 1st-order low shelf via tone + parallel]
-;     → [Compressor]
-;     → [Output Gain]
-;     → [Hard Clip ±1.0]
-;     → [TPDF Dither + Word-Length Reduction]
-;     → OUT
-;
-;   Chain ordering rationale — see README.md.
+;   IN → Pitch Shift → EQ → Bitcrusher → Ring Mod → Helmet Echo
+;   → Bass Boost → Compressor → Output Gain → Hard Clip + TPDF Dither + WLR → OUT
 ;
 ; ---- Running ------------------------------------------------
 ;
-;   JACK:
-;     csound -+rtaudio=jack -+rtmidi=null \
-;             -odac -iadc -b256 -B1024 DeMoD_Vox.csd
+;   csound -+rtaudio=jack -odac -iadc -b256 -B1024 DeMoD_Vox.csd
 ;
-;   ALSA:
-;     csound -+rtaudio=alsa -odac0 -iadc0 \
-;             -b512 -B2048 DeMoD_Vox.csd
-;
-;   In Carla: use csound-lv2 → https://github.com/kunstmusik/csound-lv2
-;
-; ---- Channel Reference  (chnset / chnget) ------------------
-;
-;   Channel name   Range               Default  Description
-;   ─────────────  ──────────────────  ───────  ──────────────────────────
-;   pitch_st       -12 – 0 semitones   0        Down-tune amount
-;   bass_db        0   – 18 dB         0        Bass shelf gain
-;   bass_freq      40  – 400 Hz        120      Bass shelf -3 dB point
-;   hpf_freq       20  – 500 Hz        100      HPF cut frequency
-;   lpf_freq       1000– 12000 Hz      4500     LPF cut frequency
-;   mid_db         0   – 18 dB         6        Mid peak gain
-;   mid_freq       500 – 5000 Hz       2000     Mid peak centre Hz
-;   mid_bw         100 – 4000 Hz       800      Mid peak bandwidth
-;   bit_depth      2   – 16            8        Crusher word length
-;   downsample     1   – 8             2        SR divisor
-;   crush_mix      0   – 1             0.6      Crusher wet/dry
-;   ring_freq      1   – 800 Hz        60       Ring mod carrier Hz
-;   ring_mix       0   – 1             0.35     Ring mod wet/dry
-;   echo_ms        1   – 60 ms         10       Echo delay time
-;   echo_mix       0   – 1             0.22     Echo wet level
-;   echo_fb        0   – 0.7           0.15     Echo feedback
-;   comp_thresh    -40 – 0 dBFS        -18      Compressor threshold
-;   comp_ratio     1   – 20            8        Compressor ratio
-;   comp_attack    0.1 – 80 ms         5        Compressor attack
-;   comp_release   10  – 500 ms        60       Compressor release
-;   out_gain       -12 – 24 dB         6        Output level / makeup gain
-;   out_bits       16 / 20 / 24        16       Output word length
 ; ============================================================
 
 <CsoundSynthesizer>
@@ -97,17 +35,16 @@
 
 <CsInstruments>
 
-; ---- LOCKED sample rate ------------------------------------
-sr     = 96000
+sr     = 48000
 ksmps  = 32
 nchnls = 1
 0dbfs  = 1.0
 
 ; ============================================================
-;  instr 0 — Startup channel initialisation
+;  instr 99 — ONE-TIME channel defaults
 ; ============================================================
 
-instr 0
+instr 99
   chnset 0.0,     "pitch_st"
   chnset 0.0,     "bass_db"
   chnset 120.0,   "bass_freq"
@@ -235,8 +172,8 @@ endin
 </CsInstruments>
 
 <CsScore>
-i 0  0  0
-i 1  0  86400
+i 99  0  0
+i 1   0  86400
 e
 </CsScore>
 
