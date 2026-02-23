@@ -201,11 +201,8 @@ instr 1
   ;
   ;  PVS PIPELINE:
   ;    pvsanal  — STFT analysis → complex spectral stream fsig
-  ;    pvsca   — scale all bin amplitudes
-  ;    pvsadsb — frequency shifting with amplitude scaling
-  ;    pvsynth — inverse STFT → audio
-  ;
-  ;  Using pvsftw/pvsifw for Csound 7 compatible frequency scaling.
+  ;    pvscal   — scale all bin frequencies by k_scale
+  ;    pvsynth  — inverse STFT → audio
   ;
   ;  LATENCY: ifftsize / sr = 2048 / 96000 ≈ 21 ms (constant).
   ;
@@ -222,7 +219,7 @@ instr 1
   k_scale    = pow(2, k_pitch_st / 12.0)
 
   f_sig      pvsanal  a_in, i_fftsize, i_overlap, i_winsize, 1
-  f_scaled   pvsftw   f_sig, k_scale, 1.0
+  f_scaled   pvscal   f_sig, k_scale, 0, 1
   a_eq       pvsynth  f_scaled
 
   ; ==========================================================
