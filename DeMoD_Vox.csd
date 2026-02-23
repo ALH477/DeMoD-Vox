@@ -98,11 +98,6 @@
 <CsInstruments>
 
 ; ---- LOCKED sample rate ------------------------------------
-; Do NOT change sr.  All filter coefficients, PVS parameters,
-; delay times, and dither amplitudes are calibrated for 96 kHz.
-; ksmps=32 at 96 kHz = 0.33 ms per control block.
-; PVS constraint: ioverlap (512) must be divisible by ksmps (32) → OK: 512/32 = 16.
-
 sr     = 96000
 ksmps  = 32
 nchnls = 1
@@ -110,51 +105,39 @@ nchnls = 1
 
 ; ============================================================
 ;  instr 0 — Startup channel initialisation
-;
-;  Writes all defaults BEFORE instr 1 starts audio processing.
-;  Without this, chnget returns 0 for uninitialised channels,
-;  which is a valid (and wrong) value for many parameters.
 ; ============================================================
 
 instr 0
-  ; Heavy
   chnset 0.0,     "pitch_st"
   chnset 0.0,     "bass_db"
   chnset 120.0,   "bass_freq"
-  ; EQ
   chnset 100.0,   "hpf_freq"
   chnset 4500.0,  "lpf_freq"
   chnset 6.0,     "mid_db"
   chnset 2000.0,  "mid_freq"
   chnset 800.0,   "mid_bw"
-  ; Bitcrusher
   chnset 8.0,     "bit_depth"
   chnset 2.0,     "downsample"
   chnset 0.6,     "crush_mix"
-  ; Ring mod
   chnset 60.0,    "ring_freq"
   chnset 0.35,    "ring_mix"
-  ; Echo
   chnset 10.0,    "echo_ms"
   chnset 0.22,    "echo_mix"
   chnset 0.15,    "echo_fb"
-  ; Compressor
   chnset -18.0,   "comp_thresh"
   chnset 8.0,     "comp_ratio"
   chnset 5.0,     "comp_attack"
   chnset 60.0,    "comp_release"
-  ; Output
   chnset 6.0,     "out_gain"
   chnset 16.0,    "out_bits"
 endin
 
 ; ============================================================
-;  instr 1 — Main FX processor  (runs full session)
+;  instr 1 — Main FX processor
 ; ============================================================
 
 instr 1
 
-  ; ---- Read control channels --------------------------------
   k_pitch_st  chnget "pitch_st"
   k_bass_db   chnget "bass_db"
   k_bass_hz   chnget "bass_freq"
@@ -178,7 +161,6 @@ instr 1
   k_outdb     chnget "out_gain"
   k_outbits   chnget "out_bits"
 
-  ; ---- Input guards -----------------------------------------
   k_echo_ms  = (k_echo_ms < 1 ? 1 : k_echo_ms)
   k_ratio    = (k_ratio < 1 ? 1 : (k_ratio > 20 ? 20 : k_ratio))
   k_outbits  = (k_outbits >= 22 ? 24 : (k_outbits >= 18 ? 20 : 16))
@@ -187,99 +169,62 @@ instr 1
   k_rel_s    = k_rel_ms  / 1000.0
   k_echo_t   = k_echo_ms / 1000.0
 
-  ; ---- Audio input ------------------------------------------
   a_in       inch 1
 
-  ; ==========================================================
-  ;  STAGE 0 — Pitch Shift (PVS phase vocoder)
-  ; ==========================================================
-
+  ; STAGE 0 — Pitch Shift
   i_fftsize  = 2048
   i_overlap  =  512
   i_winsize  = 2048
-
   k_scale    = pow(2, k_pitch_st / 12.0)
-
   f_sig      pvsanal  a_in, i_fftsize, i_overlap, i_winsize, 1
   f_scaled   pvscale  f_sig, k_scale, 0, 1
   a_eq       pvsynth  f_scaled
 
-  ; ==========================================================
-  ;  STAGE 1 — EQ
-  ; ==========================================================
-
+  ; STAGE 1 — EQ
   a_eq       butterhp a_eq, k_hpf_hz
   a_eq       butterlp a_eq, k_lpf_hz
   a_eq       eqfil    a_eq, k_mid_hz, k_mid_bw, ampdb(k_mid_db)
 
-  ; ==========================================================
-  ;  STAGE 2 — Bitcrusher / Downsample
-  ; ==========================================================
-
+  ; STAGE 2 — Bitcrusher
   k_ds_int   = int(k_ds)
   k_steps    = pow(2, k_bits - 1)
-
   a_crush    = floor(a_eq * k_steps + 0.5) / k_steps
-
   a_phs      phasor sr / k_ds_int
   a_ds       samphold a_crush, a_phs
-
   a_eq       = (1 - k_cmix) * a_eq + k_cmix * a_ds
 
-  ; ==========================================================
-  ;  STAGE 3 — Ring Modulator
-  ; ==========================================================
-
+  ; STAGE 3 — Ring Modulator
   a_carrier  poscil 1, k_ring_hz
   a_ring     = a_eq * a_carrier
   a_eq       = (1 - k_rmix) * a_eq + k_rmix * a_ring
 
-  ; ==========================================================
-  ;  STAGE 4 — Helmet Echo
-  ; ==========================================================
-
+  ; STAGE 4 — Helmet Echo
   i_max_dly  = 65
   a_delout   init 0
-
   a_delin    = a_eq + a_delout * k_efb
   a_delout   vdelay a_delin, k_echo_t * 1000, i_max_dly
-
   a_eq       = a_eq + a_delout * k_emix
 
-  ; ==========================================================
-  ;  STAGE 4b — Bass Boost (proper 1st-order low shelf)
-  ; ==========================================================
-
+  ; STAGE 4b — Bass Boost
   k_bass_lin = ampdb(k_bass_db)
   a_lp       tone a_eq, k_bass_hz
   a_eq       = a_eq + a_lp * (k_bass_lin - 1)
 
-  ; ==========================================================
-  ;  STAGE 5 — Compressor
-  ; ==========================================================
-
+  ; STAGE 5 — Compressor
   a_eq       compress a_eq, a_eq, \
                  k_thresh, k_thresh+3, k_thresh+6, \
                  k_ratio, k_att_s, k_rel_s, 0.01
 
-  ; ==========================================================
-  ;  STAGE 6a — Output gain
-  ; ==========================================================
-
+  ; STAGE 6a — Output gain
   k_gain     = ampdb(k_outdb)
   a_out      = a_eq * k_gain
 
-  ; ==========================================================
-  ;  STAGE 6b — Hard Clip + TPDF Dither + Word-Length Reduction
-  ; ==========================================================
-
+  ; STAGE 6b — Hard Clip + TPDF Dither + WLR
   k_out_steps = pow(2, k_outbits - 1)
   k_lsb       = 1.0 / k_out_steps
-
   a_r1        rand k_lsb * 0.5
   a_r2        rand k_lsb * 0.5
   a_dither    = a_r1 - a_r2
-
   a_out       limit a_out, -1.0, 1.0
   a_out       = floor((a_out + a_dither) * k_out_steps + 0.5) / k_out_steps
 
