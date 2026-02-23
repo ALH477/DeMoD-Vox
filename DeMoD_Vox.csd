@@ -201,24 +201,13 @@ instr 1
   ;
   ;  PVS PIPELINE:
   ;    pvsanal  — STFT analysis → complex spectral stream fsig
-  ;    pvscale  — scale all bin frequencies by k_scale
-  ;    pvsynth  — inverse STFT → audio
+  ;    pvsca   — scale all bin amplitudes
+  ;    pvsadsb — frequency shifting with amplitude scaling
+  ;    pvsynth — inverse STFT → audio
   ;
-  ;  PARAMETERS:
-  ;    ifftsize = 2048  (FFT frame — determines frequency resolution)
-  ;    ioverlap =  512  (hop size = ifftsize/4 = 75% overlap)
-  ;    iwinsize = 2048  (analysis window, matched to fftsize)
-  ;    iwintype = 1     (von Hann — lowest spectral leakage)
-  ;
-  ;  CONSTRAINTS:
-  ;    ioverlap must be divisible by ksmps: 512 / 32 = 16  ✓
+  ;  Using pvsftw/pvsifw for Csound 7 compatible frequency scaling.
   ;
   ;  LATENCY: ifftsize / sr = 2048 / 96000 ≈ 21 ms (constant).
-  ;
-  ;  FORMANT PRESERVATION:
-  ;    kkeepform = 0 — raw frequency scaling; formants shift
-  ;    down with the pitch for an inhuman armored character.
-  ;    Set kkeepform = 1 for a more natural voice pitch shift.
   ;
   ;  SCALE: k_scale = 2^(semitones/12)
   ;    0 st  → 1.000   passthrough (21 ms latency still applies)
@@ -233,7 +222,7 @@ instr 1
   k_scale    = pow(2, k_pitch_st / 12.0)
 
   f_sig      pvsanal  a_in, i_fftsize, i_overlap, i_winsize, 1
-  f_scaled   pvscale  f_sig, k_scale, 0, 1
+  f_scaled   pvsftw   f_sig, k_scale, 1.0
   a_eq       pvsynth  f_scaled
 
   ; ==========================================================
@@ -290,29 +279,25 @@ instr 1
   ;  Feedback comb filter simulating closed-visor acoustics.
   ;  Minimum 1 ms delay prevents zero-sample feedback loop.
   ;
-  ;  Flow:
-  ;    a_echo_in = a_eq + a_fb × feedback_amount
-  ;    delayw writes a_echo_in into the delay line
-  ;    delayr opens the delay line for reading (max = i_max_dly)
-  ;    deltapi taps at k_echo_t seconds (interpolated)
-  ;    a_fb caches the tap for the next k-block
+  ;  Csound 7 compatible: uses vdelay (variable delay) instead
+  ;  of the delayr/delayw/deltapi pattern which changed in CS7.
   ;
-  ;  Note: a_fb is one k-block (32 samples = 0.33 ms) late
-  ;  relative to the true continuous-time feedback path.  This
-  ;  is acceptable at 96 kHz — the error is <1 ms at all
-  ;  echo settings and inaudible in this application.
+  ;  vdelay(asig, idel, imaxdel) — interpolated variable delay
+  ;    idel = k_echo_t * 1000 (convert to ms for vdelay)
+  ;    imaxdel = i_max_dly * 1000 (max delay in ms)
+  ;
+  ;  Feedback loop: a_delout feeds back into the delay input.
   ; ==========================================================
 
-  i_max_dly  = 0.065              ; 65 ms — slider max is 60 ms
-  a_fb       init 0               ; zero on first block
+  i_max_dly  = 65                 ; 65 ms — slider max is 60 ms
+  a_delout   init 0               ; zero on first block
 
-  a_echo_in  = a_eq + a_fb * k_efb
-               delayw a_echo_in
-               delayr i_max_dly
-  a_tap      deltapi k_echo_t
-  a_fb       = a_tap
+  ; Feedback delay using vdelay (Csound 7 compatible)
+  a_delin    = a_eq + a_delout * k_efb
+  a_delout   vdelay a_delin, k_echo_t * 1000, i_max_dly
 
-  a_eq       = a_eq + a_tap * k_emix
+  ; Mix dry + wet
+  a_eq       = a_eq + a_delout * k_emix
 
   ; ==========================================================
   ;  STAGE 4b — Bass Boost (FIX: proper 1st-order low shelf)
