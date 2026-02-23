@@ -179,10 +179,16 @@ instr 1
   k_outbits   chnget "out_bits"
 
   ; ---- Input guards -----------------------------------------
+  ; Echo: 1 ms minimum prevents zero-sample feedback instability.
   k_echo_ms  = (k_echo_ms < 1 ? 1 : k_echo_ms)
+
+  ; Ratio: clamp to [1, 20] — compress opcode is undefined for ratio < 1.
   k_ratio    = (k_ratio < 1 ? 1 : (k_ratio > 20 ? 20 : k_ratio))
+
+  ; out_bits: snap to nearest valid value (16 / 20 / 24).
   k_outbits  = (k_outbits >= 22 ? 24 : (k_outbits >= 18 ? 20 : 16))
 
+  ; Convert timings from ms to seconds.
   k_att_s    = k_att_ms  / 1000.0
   k_rel_s    = k_rel_ms  / 1000.0
   k_echo_t   = k_echo_ms / 1000.0
@@ -192,6 +198,18 @@ instr 1
 
   ; ==========================================================
   ;  STAGE 0 — Pitch Shift (PVS phase vocoder)
+  ;
+  ;  PVS PIPELINE:
+  ;    pvsanal  — STFT analysis → complex spectral stream fsig
+  ;    pvscale  — scale all bin frequencies by k_scale
+  ;    pvsynth  — inverse STFT → audio
+  ;
+  ;  LATENCY: ifftsize / sr = 2048 / 96000 ≈ 21 ms (constant).
+  ;
+  ;  SCALE: k_scale = 2^(semitones/12)
+  ;    0 st  → 1.000   passthrough (21 ms latency still applies)
+  ;   -6 st  → 0.707   tritone down
+  ;  -12 st  → 0.500   one octave down
   ; ==========================================================
 
   i_fftsize  = 2048
@@ -206,6 +224,10 @@ instr 1
 
   ; ==========================================================
   ;  STAGE 1 — EQ
+  ;
+  ;  HPF removes low-end mud; LPF limits bandwidth to vox-unit
+  ;  range; parametric peak boosts presence / intelligibility.
+  ;  eqfil kgain is linear amplitude: convert dB first.
   ; ==========================================================
 
   a_eq       butterhp a_eq, k_hpf_hz
@@ -214,16 +236,24 @@ instr 1
 
   ; ==========================================================
   ;  STAGE 2 — Bitcrusher / Downsample
+  ;
+  ;  Bit reduction: quantise to k_bits-bit signed resolution.
+  ;    steps = 2^(k_bits-1),  step size = 1/steps
+  ;
+  ;  Sample-rate reduction: samphold with phasor gate.
   ; ==========================================================
 
   k_ds_int   = int(k_ds)
   k_steps    = pow(2, k_bits - 1)
 
+  ; Bit-depth reduction
   a_crush    = floor(a_eq * k_steps + 0.5) / k_steps
 
+  ; Sample-rate reduction via sample-and-hold
   a_phs      phasor sr / k_ds_int
   a_ds       samphold a_crush, a_phs
 
+  ; Wet/dry blend
   a_eq       = (1 - k_cmix) * a_eq + k_cmix * a_ds
 
   ; ==========================================================
@@ -236,14 +266,18 @@ instr 1
 
   ; ==========================================================
   ;  STAGE 4 — Helmet Echo
+  ;
+  ;  Feedback comb filter simulating closed-visor acoustics.
+  ;  Csound 7 compatible vdelay.
   ; ==========================================================
 
-  i_max_dly  = 65
-  a_delout   init 0
+  i_max_dly  = 65                 ; 65 ms — slider max is 60 ms
+  a_delout   init 0               ; zero on first block
 
   a_delin    = a_eq + a_delout * k_efb
   a_delout   vdelay a_delin, k_echo_t * 1000, i_max_dly
 
+  ; Mix dry + wet
   a_eq       = a_eq + a_delout * k_emix
 
   ; ==========================================================
@@ -263,7 +297,7 @@ instr 1
                  k_ratio, k_att_s, k_rel_s, 0.01
 
   ; ==========================================================
-  ;  STAGE 6a — Output gain
+  ;  STAGE 6a — Output gain (serves as compressor makeup gain)
   ; ==========================================================
 
   k_gain     = ampdb(k_outdb)
@@ -271,16 +305,25 @@ instr 1
 
   ; ==========================================================
   ;  STAGE 6b — Hard Clip + TPDF Dither + Word-Length Reduction
+  ;
+  ;  Hard clip now uses the dedicated `limit` opcode (fully
+  ;  a-rate compatible in Csound 7 — fixes the ternary error).
+  ;
+  ;  TPDF dither uses two independent rand sources.
   ; ==========================================================
 
-  k_out_steps = pow(2, k_outbits - 1)
-  k_lsb       = 1.0 / k_out_steps
+  k_out_steps = pow(2, k_outbits - 1)        ; e.g. 32767 for 16-bit
+  k_lsb       = 1.0 / k_out_steps            ; 1 LSB in float units
 
+  ; Two independent uniform noise sources, each ±0.5 LSB.
   a_r1        rand k_lsb * 0.5
   a_r2        rand k_lsb * 0.5
-  a_dither    = a_r1 - a_r2
+  a_dither    = a_r1 - a_r2                  ; TPDF, ±1 LSB
 
+  ; Hard clip (Csound 7 compatible)
   a_out       limit a_out, -1.0, 1.0
+
+  ; Dither → quantise
   a_out       = floor((a_out + a_dither) * k_out_steps + 0.5) / k_out_steps
 
                out a_out
@@ -290,7 +333,10 @@ endin
 </CsInstruments>
 
 <CsScore>
+; Initialise all channels before audio starts (duration = 0).
 i 0  0  0
+
+; Main FX processor — runs 24 h.  Stop with Ctrl+C or SIGTERM.
 i 1  0  86400
 e
 </CsScore>
