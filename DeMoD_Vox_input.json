@@ -1,0 +1,106 @@
+{
+  "input": {
+    "blocklist": [],
+
+    "plugins_order": [
+      "lv2#https://faustlv2.grame.fr/DeMoD_Vox"
+    ],
+
+    "lv2#https://faustlv2.grame.fr/DeMoD_Vox": {
+      "enabled":  true,
+      "bypass":   false,
+
+      "_comment_uri": [
+        "The URI above is the default produced by faust2lv2.",
+        "If EasyEffects does not show this plugin, verify the",
+        "actual URI with:",
+        "  cat ~/.lv2/DeMoD_Vox.lv2/manifest.ttl | grep 'lv2:Plugin'",
+        "then update this file to match."
+      ],
+
+      "_comment_controls": [
+        "Control names must match the LV2 port labels in manifest.ttl.",
+        "These are derived from the Faust hslider label strings.",
+        "EasyEffects normalises them: strip group prefix, trim whitespace.",
+        "If a control is not found, EasyEffects silently ignores it."
+      ],
+
+      "controls": {
+        "Pitch Shift":  0.0,
+        "Bass Boost":   0.0,
+        "Bass Freq":  120.0,
+
+        "HPF Freq":   100.0,
+        "LPF Freq":  4500.0,
+        "Mid Boost":    6.0,
+        "Mid Freq":  2000.0,
+        "Mid BW":     800.0,
+
+        "Bit Depth":    8.0,
+        "Downsample":   2.0,
+        "Mix":          0.6,
+
+        "Carrier Freq":  60.0,
+        "Mix":           0.35,
+
+        "Delay":        10.0,
+        "Mix":          0.22,
+        "Feedback":     0.15,
+
+        "Threshold":  -18.0,
+        "Ratio":        8.0,
+        "Attack":       5.0,
+        "Release":     60.0,
+
+        "Gain":         6.0,
+        "Bit Depth":   16.0
+      },
+
+      "_comment_duplicate_keys": [
+        "JSON does not support duplicate keys — the above is for",
+        "documentation only.  In a real preset each stage's 'Mix'",
+        "and 'Bit Depth' will have the last value win.",
+        "EasyEffects actually identifies controls by their LV2 port",
+        "index (lv2:index), not by name, so duplicate label names",
+        "are resolved correctly by the host.",
+        "The canonical control list with indices is in manifest.ttl.",
+        "Run: cat ~/.lv2/DeMoD_Vox.lv2/DeMoD_Vox.ttl | grep -A3 'lv2:index'"
+      ]
+    },
+
+    "_presets_note": {
+      "heavy_but_readable": {
+        "Pitch Shift": -3.0,
+        "Bass Boost":   8.0,
+        "Bass Freq":  120.0,
+        "Mid Boost":    5.0,
+        "Mid Freq":  1800.0,
+        "Bit Depth":   10.0,
+        "Downsample":   2.0,
+        "Carrier Freq": 80.0,
+        "Threshold":  -18.0,
+        "Ratio":        6.0
+      },
+      "armored_giant": {
+        "Pitch Shift":  -8.0,
+        "Bass Boost":  14.0,
+        "Bass Freq":   80.0,
+        "HPF Freq":    60.0,
+        "Bit Depth":    6.0,
+        "Downsample":   3.0,
+        "Carrier Freq":120.0,
+        "Threshold":  -24.0,
+        "Ratio":       12.0
+      },
+      "comms_link_only": {
+        "Pitch Shift":   0.0,
+        "Bass Boost":    0.0,
+        "HPF Freq":    300.0,
+        "LPF Freq":   3500.0,
+        "Bit Depth":    8.0,
+        "Downsample":   4.0,
+        "Carrier Freq": 45.0
+      }
+    }
+  }
+}
