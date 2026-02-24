@@ -8,6 +8,8 @@ Transforms a microphone input into a sealed-helmet, vox-unit voice. Granular pit
 
 Packaged as a Nix flake with NixOS and Home Manager modules for one-command setup with Carla and EasyEffects over PipeWire/JACK.
 
+[video](https://youtu.be/lEKtIthHxRQ)
+
 ---
 
 ## ⚠ Latency
