@@ -2,6 +2,10 @@
 
 **Power armor voice FX — LV2 (Faust) + Csound instrument for Linux.**
 
+Inspired by this song. https://www.youtube.com/watch?v=-S8Kr4NvYJY&list=RDMM&start_radio=1&rv=O_xgVCWPzSM
+
+Released as an open source MIT project since I am still learning. Also want you bastards to make shit like this!!!!
+
 <img width="1280" height="640" alt="DeMoD-Vox" src="https://github.com/user-attachments/assets/7654cff5-7bad-4464-9c63-26de502948b1" />
 
 Transforms a microphone input into a sealed-helmet, vox-unit voice. Granular pitch shifting, bass shelf boost, bitcrusher, ring modulator, helmet echo, compressor, and TPDF-dithered output to 16/20/24-bit at a locked 96 kHz sample rate.
